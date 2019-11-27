@@ -10,15 +10,13 @@ candidatos_dep$eleito <- as.factor(candidatos_dep$eleito)
 idhm <- read.csv('idhm.csv')
 
 idhm_mulheres <- read.csv('idhm_eleicao.csv')
+idhm_mulheres$ano <- as.factor(idhm_mulheres$ano)
 
 ################################################
 ##
 ## Subsets para análise
 ##
 ################################################
-candidatos_dep2010 <- subset(candidatos_dep, ano==2010)
-idhm2010_mulheres <- subset(idhm_mulheres, ano==2010)
-
 obter_candidatos_dep_mulheres <- function(ano_eleicao) {
   ano_key <- as.character(ano_eleicao)
   candidatos_dep <- subset(candidatos_dep, ano==ano_eleicao)
@@ -65,8 +63,10 @@ obter_candidatos_dep_mulheres_part <- function(ano_eleicao) {
   candidatos_dep_mulheres_part
 }
 
-candidatos_dep_mulheres <- rbind(obter_candidatos_dep_mulheres(2010), obter_candidatos_dep_mulheres(2014), obter_candidatos_dep_mulheres(2018))
-candidatos_dep_mulheres_part <- rbind(obter_candidatos_dep_mulheres_part(2010), obter_candidatos_dep_mulheres_part(2014), obter_candidatos_dep_mulheres_part(2018))
+candidatos_dep_mulheres <-
+  rbind(obter_candidatos_dep_mulheres(2010), obter_candidatos_dep_mulheres(2014), obter_candidatos_dep_mulheres(2018))
+candidatos_dep_mulheres_part <-
+  rbind(obter_candidatos_dep_mulheres_part(2010), obter_candidatos_dep_mulheres_part(2014), obter_candidatos_dep_mulheres_part(2018))
 
 ################################################
 ##
@@ -91,25 +91,13 @@ subset(candidatos_dep, idade < 10 | idade > 90, select=c(ano, uf, cargo, nome, d
 ################################################
 ##
 ## Análise descritiva
-##     - percentual mulheres candidatas (*)
+##     - UF x percentual mulheres candidatas (*)
+##     - UF x percentual mulheres eleitas
+##     - UF x percentual aprovação mulheres
 ##
 ################################################
 ggplot(candidatos_dep_mulheres, aes(uf, perc_mulheres_candidatas, color = ano)) + geom_point()
-
-################################################
-##
-## Análise descritiva (*)
-##     - percentual mulheres eleitas
-##
-################################################
 ggplot(candidatos_dep_mulheres, aes(uf, perc_mulheres_eleitas, color = ano, size = 1)) + geom_point()
-
-################################################
-##
-## Análise descritiva
-##     - percentual aprovação mulheres
-##
-################################################
 ggplot(candidatos_dep_mulheres, aes(uf, perc_aprovacao_mulheres, color = ano, size = 1)) + geom_point()
 
 ################################################
@@ -149,34 +137,80 @@ plot(candidatos_dep_mulheres$uf, candidatos_dep_mulheres$perc_aprovacao_mulheres
 ##
 ## Regressão linear
 ##    - perc_mulheres_candidatas ~ IDHM
-##
-################################################
-ggplot(idhm2010_mulheres, aes(x = idhm, y = perc_mulheres_candidatas)) + geom_point() + geom_smooth(method = "lm")
-
-################################################
-##
-## Regressão linear
 ##    - perc_mulheres_eleitas ~ IDHM
-##
-################################################
-ggplot(idhm2010_mulheres, aes(x = idhm, y = perc_mulheres_eleitas)) + geom_point() + geom_smooth(method = "lm")
-fit <- lm(perc_mulheres_eleitas ~ idhm + idhm_renda + idhm_longevidade + idhm_educacao, data = idhm2010_mulheres)
-summary(fit)
-
-################################################
-##
-## Regressão linear
 ##    - perc_aprovacao_mulheres ~ IDHM
 ##
 ################################################
-ggplot(idhm2010_mulheres, aes(x = idhm, y = perc_aprovacao_mulheres)) + geom_point() + geom_smooth(method = "lm")
+ggplot(idhm_mulheres, aes(x = idhm, y = perc_mulheres_candidatas, color=ano)) + geom_point() + geom_smooth(method = "lm")
+ggplot(idhm_mulheres, aes(x = idhm, y = perc_mulheres_eleitas, color=ano)) + geom_point() + geom_smooth(method = "lm")
+ggplot(idhm_mulheres, aes(x = idhm, y = perc_aprovacao_mulheres, color=ano)) + geom_point() + geom_smooth(method = "lm")
+
+##########################################################
+##
+## Regressão linear
+##    - perc_aprovacao_mulheres ~ perc_mulheres_candidatas
+##
+#########################################################
+ggplot(idhm_mulheres, aes(x = perc_mulheres_candidatas, y = perc_aprovacao_mulheres, color=ano)) + geom_point() + geom_smooth(method = "lm")
+
+#####################################################
+##
+## Funções de apoio para os experimentos de modelagem
+##
+#####################################################
+linear_regression <- function(formulas, data, top=10) {
+  lm1 <- c()
+  aR2 <- c()
+  pV3 <- c()
+  for (formula in formulas) {
+    fit <- do.call("lm", list(formula = formula, data))
+    summary <- summary(fit)
+    lm1 <- c(lm1, formula)
+    aR2 <- c(aR2, round(summary$r.squared, 6))
+    pV3 <- c(pV3, round(pf(summary$fstatistic[1], summary$fstatistic[2], summary$fstatistic[3], lower.tail=F), 6))
+  }
+  marginal_analysis <- data.frame(lm1, aR2, pV3)
+  marginal_analysis <- marginal_analysis[order(-marginal_analysis$aR2),]
+  head(marginal_analysis, top)
+}
+
+linear_regression_removing_uf <- function(formula, data) {
+  uf1_final <- c()
+  aR2_final <- c()
+  pV3_final <- c()
+  grupo <- ''
+  iteracoes <- length(unique(data$uf))-2
+  data_iteration <- data
+  for (iteration in 1:iteracoes) {
+    uf1 <- c()
+    aR2 <- c()
+    pV3 <- c()
+    for (uf_removida in unique(data_iteration$uf)) {
+      fit <- do.call("lm", list(formula = formula, data_iteration[data_iteration$uf != uf_removida,]))
+      summary <- summary(fit)
+      uf1 <- c(uf1, uf_removida)
+      aR2 <- c(aR2, round(summary$r.squared, 6))
+      pV3 <- c(pV3, round(pf(summary$fstatistic[1], summary$fstatistic[2], summary$fstatistic[3], lower.tail=F), 6))
+    }
+    marginal_analysis <- data.frame(uf1, aR2, pV3)
+    marginal_analysis <- marginal_analysis[order(-marginal_analysis$aR2),]
+    best_uf_removida <- marginal_analysis$uf1[1]
+    best_R2 <- marginal_analysis$aR2[1]
+    best_pV <- marginal_analysis$pV3[1]
+    grupo <- paste(grupo, best_uf_removida, sep = '|')
+    uf1_final <- c(uf1_final, grupo)
+    aR2_final <- c(aR2_final, round(best_R2, 6))
+    pV3_final <- c(pV3_final, round(best_pV, 6))
+    data_iteration <- data_iteration[!grepl(paste('(',best_uf_removida,')',sep = ''), data_iteration$uf),]
+  }
+  data.frame(uf1_final, aR2_final, pV3_final)
+}
 
 ################################################
 ##
 ## Experimentos com partido
 ##
 ################################################
-
 formulas_eleicao <- c(
   'perc_mulheres_eleitas ~ perc_mulheres_candidatas',
   'perc_mulheres_eleitas ~ partido',
@@ -184,16 +218,37 @@ formulas_eleicao <- c(
   'perc_mulheres_eleitas ~ partido + uf',
   'perc_mulheres_eleitas ~ perc_mulheres_candidatas + partido',
   'perc_mulheres_eleitas ~ perc_mulheres_candidatas + uf',
-  'perc_mulheres_eleitas ~ perc_mulheres_candidatas + partido + uf'
+  'perc_mulheres_eleitas ~ perc_mulheres_candidatas + partido + uf',
+  'perc_aprovacao_mulheres ~ perc_mulheres_candidatas',
+  'perc_aprovacao_mulheres ~ partido',
+  'perc_aprovacao_mulheres ~ uf',
+  'perc_aprovacao_mulheres ~ partido + uf',
+  'perc_aprovacao_mulheres ~ perc_mulheres_candidatas + partido',
+  'perc_aprovacao_mulheres ~ perc_mulheres_candidatas + uf',
+  'perc_aprovacao_mulheres ~ perc_mulheres_candidatas + partido + uf'
 )
-linear_regression(formulas_eleicao, data=candidatos_dep_mulheres_part)
+
+####################################################################
+## Procurar melhor modelo para o subset candidatos_dep_mulheres_part
+####################################################################
+for (ano_eleicao in c(2010, 2014, 2018)) {
+  cat('Eleições de', ano_eleicao)
+  print(linear_regression(formulas_eleicao, data = subset(candidatos_dep_mulheres_part, ano == ano_eleicao)))
+  cat('\n')
+}
+cat('Totas as eleições')
+print(linear_regression(formulas_eleicao, data = candidatos_dep_mulheres_part))
+cat('\n')
+# melhor modelo 2010           : perc_aprovacao_mulheres ~ perc_mulheres_candidatas + partido + uf 0.158514 0.0e+00
+# melhor modelo 2014           : perc_mulheres_eleitas ~ perc_mulheres_candidatas + partido + uf 0.113355 0.000009
+# melhor modelo 2018           : perc_mulheres_eleitas ~ perc_mulheres_candidatas + partido + uf 0.130681 0.000000
+# melhor modelo 2010+2014+2018 : perc_mulheres_eleitas ~ perc_mulheres_candidatas + partido + uf 0.093832   0
 
 ################################################
 ##
 ## Experimentos com IDHM
 ##
 ################################################
-
 formulas_IDHM <- c(
   'perc_mulheres_eleitas ~ perc_mulheres_candidatas',
   'perc_mulheres_eleitas ~ idhm',
@@ -222,10 +277,9 @@ formulas_IDHM <- c(
   'perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao'
 )
 
-#######
-## Procurar melhor modelo
-#######
-
+#####################################################
+## Procurar melhor modelo para o subset idhm_mulheres
+#####################################################
 for (ano_eleicao in c(2010, 2014)) {
   cat('Eleições de', ano_eleicao)
   print(linear_regression(formulas_IDHM, data = subset(idhm_mulheres, ano == ano_eleicao)))
@@ -236,12 +290,11 @@ print(linear_regression(formulas_IDHM, data = idhm_mulheres))
 cat('\n')
 # melhor modelo 2010      : perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao 0.289785 0.045324
 # melhor modelo 2014      : perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao 0.134348 0.335548
-# melhor modelo 2010,2014 : perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao 0.217883 0.006112
+# melhor modelo 2010+2014 : perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao 0.217883 0.006112
 
-#######
+######################################################################
 ## Identificar grupo 2 - UFs que prejudicam o melhor modelo encontrado
-#######
-
+######################################################################
 for (ano_eleicao in c(2010, 2014)) {
   cat('Eleições de', ano_eleicao)
   print(linear_regression_removing_uf('perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao', data = subset(idhm_mulheres, ano == ano_eleicao)))
@@ -254,17 +307,17 @@ cat('\n')
 # Grupo 2 para 2014      : AP|PA|AL|AM|PB|RN|SC|DF|SP|TO|RR|CE|BA|PR|MT     0.965648  0.000003
 # Grupo 2 para 2010+2014 : AL|PA|AM|SE|AP|TO|MS|MT|AC|RR|SC|SP|DF|RN        0.722770  0.000002
 
-#######
+###################################################################
 ## Procurar melhor modelo para os grupo 1 e 2
 ## considerando o grupo2 que otimiza o modelo no período 2010+2014:
 ##    - AL|PA|AM|SE|AP|TO|MS|MT|AC|RR|SC|SP|DF|RN
-#######
+###################################################################
 grupo2_global <- '(AL|PA|AM|SE|AP|TO|MS|MT|AC|RR|SC|SP|DF|RN)'
 for (ano_eleicao in c(2010, 2014)) {
   idhm_ano <- subset(idhm_mulheres, ano == ano_eleicao)
   cat('Eleições de', ano_eleicao, ' - melhor modelo para o grupo1:', '\n')
   print(linear_regression(formulas_IDHM, data = idhm_ano[!grepl(grupo2_global, idhm_ano$uf),], top = 1))
-  cat('\nEleições de', ano_eleicao, ' - melhor modelo para o grupo2', grupo2, ':\n')
+  cat('\nEleições de', ano_eleicao, ' - melhor modelo para o grupo2', grupo2_global, ':\n')
   print(linear_regression(formulas_IDHM, data = idhm_ano[grepl(grupo2_global, idhm_ano$uf),], top = 1))
   cat('\n')
 }
@@ -275,22 +328,20 @@ for (ano_eleicao in c(2010, 2014)) {
 #  melhor modelo grupo 1: perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao 0.613884 0.029525
 #  melhor modelo grupo 2: perc_mulheres_eleitas ~ perc_mulheres_candidatas + idhm_renda + idhm_longevidade + idhm_educacao 0.11507 0.875607
 
-#######
-## Procurar melhor modelo para os grupo 1 e 2
+###################################################################
+## Procurar melhor modelo para os grupos 1 e 2
 ## considerando a interseção entre cada grupo2 que otimiza o modelo nos períodos 2010, 2014 e 2010+2014:
 ##    - AL|MT|RR|SC|DF|RN
 # Grupo 2 para 2010      : *AL|-SE|-CE|*RR|-RS|*DF|*SC|-AC|ES|MG|MA|*RN|PE|*MT|-MS|PI  0.989386  0.000000
 # Grupo 2 para 2014      : -AP|-PA|*AL|-AM|PB|*RN|*SC|*DF|-SP|-TO|*RR|-CE|BA|PR|*MT     0.965648  0.000003
 # Grupo 2 para 2010+2014 : *AL|-PA|-AM|-SE|-AP|-TO|-MS|*MT|-AC|*RR|*SC|-SP|*DF|*RN        0.722770  0.000002
-
-
-#######
+###################################################################
 grupo2_global <- '(AL|MT|RR|SC|DF|RN)'
 for (ano_eleicao in c(2010, 2014)) {
   idhm_ano <- subset(idhm_mulheres, ano == ano_eleicao)
   cat('Eleições de', ano_eleicao, ' - melhor modelo para o grupo1:', '\n')
   print(linear_regression(formulas_IDHM, data = idhm_ano[!grepl(grupo2_global, idhm_ano$uf),], top = 1))
-  cat('\nEleições de', ano_eleicao, ' - melhor modelo para o grupo2', grupo2, ':\n')
+  cat('\nEleições de', ano_eleicao, ' - melhor modelo para o grupo2', grupo2_global, ':\n')
   print(linear_regression(formulas_IDHM, data = idhm_ano[grepl(grupo2_global, idhm_ano$uf),], top = 1))
   cat('\n')
 }
@@ -300,23 +351,6 @@ for (ano_eleicao in c(2010, 2014)) {
 # 2014
 #  melhor modelo grupo 1: perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao 0.167045 0.362524
 #  melhor modelo grupo 2: perc_mulheres_eleitas ~ perc_mulheres_candidatas + idhm_renda + idhm_longevidade + idhm_educacao 0.637021 0.794373
-
-
-#######
-## Ano 2014
-## Procurar melhor modelo para os grupo 1 e 2
-#######
-ano_eleicao <- 2014
-idhm_ano <- subset(idhm_mulheres, ano == ano_eleicao)
-grupo2 <- '(AP|PA|AL|AM|PB|RN|SC|DF|SP|TO|RR|CE|BA|PR|MT)'
-cat('Eleições de', ano_eleicao, '\n')
-print('Melhor modelo para o grupo1')
-linear_regression(formulas_IDHM, data = idhm_ano[!grepl(grupo2, idhm_ano$uf),], top = 1)
-cat('Melhor modelo para o grupo2:', grupo2, '\n')
-linear_regression(formulas_IDHM, data = idhm_ano[grepl(grupo2, idhm_ano$uf),], top = 1)
-# 2014
-#   melhor modelo grupo 1: perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao 0.989386 0.000000
-#   melhor modelo grupo 2: perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao 0.236579 0.338453
 
 ################################################
 ##
