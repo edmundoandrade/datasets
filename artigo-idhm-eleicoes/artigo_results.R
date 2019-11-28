@@ -389,6 +389,15 @@ c(round(summary$r.squared, 6), round(pf(summary$fstatistic[1], summary$fstatisti
 #Multiple R-squared:  0.7228,	Adjusted R-squared:  0.685 
 #F-statistic: 19.12 on 3 and 22 DF,  p-value: 2.483e-06
 #0.722770 0.000002
+residuos <- resid(fit)
+par(mfrow=c(1,1))
+qqnorm(residuos, xlab='Quantis teóricos', ylab='Quantis dos resíduos')
+qqline(residuos)
+mtext(
+  paste('Shapiro-Wilk p-value= ', round(shapiro.test(residuos)$p.value, 6), '               ',
+        'Kolmogorov-Smirnov p-value= ', round(ks.test((residuos-mean(residuos))/sd(residuos), "pnorm")$p.value, 6)))
+c(round(shapiro.test(residuos)$p.value, 6), round(ks.test((residuos-mean(residuos))/sd(residuos), "pnorm")$p.value, 6))
+#0.360128 0.980406
 
 fit <- lm('perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao', data=idhm_mulheres[grepl(grupo2_global, idhm_ano$uf),])
 summary <- summary(fit)
