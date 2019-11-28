@@ -82,7 +82,8 @@ ggplot(candidatos_dep, aes(uf, fill = sexo)) + geom_bar()
 ## Análise descritiva - idade
 ##
 ################################################
-ggplot(candidatos_dep, aes(idade, fill=ano)) + geom_density(alpha = 0.2)
+ggplot(subset(candidatos_dep, ano!=2018),
+       aes(idade, fill=ano)) + geom_density(alpha = 0.2)
 ggplot(subset(candidatos_dep, sexo=='FEMININO'), aes(idade, fill=ano)) + geom_density(alpha = 0.2)
 ggplot(subset(candidatos_dep, sexo!='FEMININO'), aes(idade, fill=ano)) + geom_density(alpha = 0.2)
 summary(candidatos_dep$idade)
@@ -96,9 +97,15 @@ subset(candidatos_dep, idade < 10 | idade > 90, select=c(ano, uf, cargo, nome, d
 ##     - UF x percentual aprovação mulheres
 ##
 ################################################
-ggplot(candidatos_dep_mulheres, aes(uf, perc_mulheres_candidatas, color = ano)) + geom_point()
-ggplot(candidatos_dep_mulheres, aes(uf, perc_mulheres_eleitas, color = ano, size = 1)) + geom_point()
-ggplot(candidatos_dep_mulheres, aes(uf, perc_aprovacao_mulheres, color = ano, size = 1)) + geom_point()
+ggplot(subset(candidatos_dep_mulheres, ano!=2018),
+       aes(uf, perc_mulheres_candidatas, color = ano, size=1)) +
+  geom_point()
+ggplot(subset(candidatos_dep_mulheres, ano!=2018),
+       aes(uf, perc_mulheres_eleitas, color = ano, size=1)) +
+  geom_point()
+ggplot(subset(candidatos_dep_mulheres, ano!=2018),
+       aes(uf, perc_aprovacao_mulheres, color = ano, size=1)) +
+  geom_point()
 
 ################################################
 ##
@@ -126,7 +133,7 @@ plot(candidatos_dep_mulheres$uf, candidatos_dep_mulheres$perc_mulheres_eleitas, 
 ##
 ## Análise descritiva
 ##     - UF x IDHM
-##     - UF x Perc.Eleitas
+##     - UF x Perc.AprovaçãoEntreMulheres
 ##
 ################################################
 par(mfrow=c(2,1))
@@ -351,6 +358,50 @@ for (ano_eleicao in c(2010, 2014)) {
 # 2014
 #  melhor modelo grupo 1: perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao 0.167045 0.362524
 #  melhor modelo grupo 2: perc_mulheres_eleitas ~ perc_mulheres_candidatas + idhm_renda + idhm_longevidade + idhm_educacao 0.637021 0.794373
+
+###########
+##
+## Tabela de resultados A
+##
+###########
+summary(lm('perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao', data=idhm_mulheres))
+#  Estimate Std. Error t value Pr(>|t|)  
+#(Intercept)       0.24408    0.12304   1.984   0.0528 .
+#idhm_renda       -0.05817    0.18824  -0.309   0.7586  
+#idhm_longevidade -0.03346    0.25561  -0.131   0.8964  
+#idhm_educacao    -0.21197    0.11244  -1.885   0.0652 .
+#Multiple R-squared:  0.2179,	Adjusted R-squared:  0.171 
+#F-statistic: 4.643 on 3 and 50 DF,  p-value: 0.006112
+
+grupo2_global <- '(AL|PA|AM|SE|AP|TO|MS|MT|AC|RR|SC|SP|DF|RN)'
+grupo1_global <-as.character(unique(idhm[!grepl(grupo2_global, idhm$uf),'uf']))
+grupo1_global
+
+fit <- lm('perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao', data=idhm_mulheres[!grepl(grupo2_global, idhm_ano$uf),])
+summary <- summary(fit)
+summary
+c(round(summary$r.squared, 6), round(pf(summary$fstatistic[1], summary$fstatistic[2], summary$fstatistic[3], lower.tail=F), 6))
+#Estimate Std. Error t value Pr(>|t|)    
+#(Intercept)       0.26911    0.08529   3.155  0.00459 ** 
+#idhm_renda       -0.19539    0.13376  -1.461  0.15821    
+#idhm_longevidade  0.23463    0.18557   1.264  0.21931    
+#idhm_educacao    -0.43876    0.09176  -4.782 8.95e-05 ***
+#Multiple R-squared:  0.7228,	Adjusted R-squared:  0.685 
+#F-statistic: 19.12 on 3 and 22 DF,  p-value: 2.483e-06
+#0.722770 0.000002
+
+fit <- lm('perc_aprovacao_mulheres ~ idhm_renda + idhm_longevidade + idhm_educacao', data=idhm_mulheres[grepl(grupo2_global, idhm_ano$uf),])
+summary <- summary(fit)
+summary
+c(round(summary$r.squared, 6), round(pf(summary$fstatistic[1], summary$fstatistic[2], summary$fstatistic[3], lower.tail=F), 6))
+#Estimate Std. Error t value Pr(>|t|)
+#(Intercept)       0.22251    0.22648   0.982    0.336
+#idhm_renda        0.01497    0.34074   0.044    0.965
+#idhm_longevidade -0.13437    0.46320  -0.290    0.774
+#idhm_educacao    -0.13373    0.19012  -0.703    0.489
+#Multiple R-squared:  0.09257,	Adjusted R-squared:  -0.02086 
+#F-statistic: 0.8161 on 3 and 24 DF,  p-value: 0.4976
+#0.092569 0.497622
 
 ################################################
 ##
